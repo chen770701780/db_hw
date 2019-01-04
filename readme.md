@@ -8,7 +8,7 @@
 
 class User(orm.Model):
     id = orm.Integer(primary_key=True)
-    name = orm.String(len=32)
+    name = orm.String(length=32)
     
 ```
 
@@ -39,8 +39,36 @@ async def delete():
 ```python
 
 async def high_select():
-    sql = User.query().where(User.id > 1).order(User.id, True).limit(10)
-    return await sql.fetch()
+    sql = User.query().where(orm.OR_(orm.AND_(orm.NOT_(User.id > 10),
+                                              User.id < 100),
+                                    User.id==10,
+                                    User.name == "cyy")).order(User.id).limit(5)
+    await sql.fetch()
+    # do other works
+
+    sql = User.query().where(User.id.between(1, 100)).order(User.id).limit(10)
+    await sql.fetch()
+    # do other works
+
+    sql = User.query().where(orm.NOT_(User.id.between(1, 100))).order(User.id).limit(10)
+    await sql.fetch()
+    # do other works
+
+    sql = User.query().where(User.id.in_([1,2,3,4,100]))
+    await sql.fetch()
+    # do other works
+
+    sql = User.query().where(orm.AND_(orm.NOT_(User.id.in_([1,2,3,4,100])), User.id.in_([11,222])))
+    await sql.fetch()
+    # do other works
+
+    sql = User.query().where(User.name.like("B%"))
+    await sql.fetch()
+    # do other works
+
+    sql = User.query().where(orm.NOT_(User.name.like("B%")))
+    await sql.fetch()
+    # do other works
 
 ```
 
@@ -62,7 +90,42 @@ async def trans():
 ```
 2
 ```python
-async await Transaction.begin() as tx:
+async with await Transaction.begin() as tx:
     await u1.save(tx)
     await u2.save(tx)
+```
+
+
+### 索引支持
+
+```python
+name = orm.String(length=32, index='idx_users_name(32)')
+
+```
+
+### 软触发器 + 业务基础类
+
+```python
+
+class BaseModel(orm.Model):
+
+    def __init__(self, **kwargs):
+        super(BaseModel, self).__init__(**kwargs)
+        orm.event_bus.add_table_event(self,
+                                      'CREATED', self.on_base_model_created)
+        orm.event_bus.add_table_event(self,
+                                      'UPDATED', self.on_base_model_update)
+
+    id = orm.Integer(primary_key=True)
+    add_time = orm.Datetime()
+    updated_at = orm.Datetime()
+    deleted_at = orm.Datetime()
+
+    def on_base_model_created(self, event, *args, **kwargs):
+        args[0].add_time = datetime.datetime.now()
+
+    def on_base_model_update(self, event, *args, **kwargs):
+        args[0].updated_at = datetime.datetime.now()
+
+
 ```

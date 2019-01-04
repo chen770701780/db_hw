@@ -37,13 +37,28 @@ async def select(sql, args, size=None):
         return rs
 
 
-async def execute(sql, args, size=None):
+async def execute(tx=None, sql=None, args=None, size=None):
     global _pool
-    logging.info(sql, str(args))
-    async with _pool.get() as con:
-        cur = await con.cursor()
+    print(sql, str(args))
+    if tx is None:
+        async with _pool.get() as con:
+            cur = await con.cursor()
+            await cur.execute(sql.replace('?', '%s'), args or ())
+            rs = cur.rowcount
+            id = cur.lastrowid
+            await cur.close()
+            print("select size {} ".format(str(rs)))
+    else:
+        cur = await tx.conn.cursor()
         await cur.execute(sql.replace('?', '%s'), args or ())
         rs = cur.rowcount
+        id = cur.lastrowid
         await cur.close()
         print("select size {} ".format(str(rs)))
-    return rs
+    if id is None:
+        return rs
+    return rs, id
+
+async def get_conn():
+    global _pool
+    return await _pool.acquire()
